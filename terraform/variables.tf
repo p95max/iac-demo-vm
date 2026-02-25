@@ -1,5 +1,5 @@
 variable "location" {
-  default = "westeurope"
+  default = "northeurope"
 }
 
 variable "vm_size" {

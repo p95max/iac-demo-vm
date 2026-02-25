@@ -5,3 +5,4 @@ docker/.env
 ansible/inventory
 .idea
 .azure_env
+inventory.ini
