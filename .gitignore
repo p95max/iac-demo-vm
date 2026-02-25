@@ -1,6 +1,7 @@
-.env
+docker/.env
 *.tfstate
 *.tfstate.*
 .terraform/
 ansible/inventory
 .idea
+.azure_env
