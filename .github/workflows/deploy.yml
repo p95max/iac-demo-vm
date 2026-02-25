@@ -21,6 +21,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare SSH keys
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
+          chmod 644 ~/.ssh/id_rsa.pub
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -30,7 +38,7 @@ jobs:
 
       - name: Terraform init
         working-directory: terraform
-        run: terraform init
+        run: terraform init -input=false
 
       - name: Terraform validate
         working-directory: terraform
@@ -38,7 +46,7 @@ jobs:
 
       - name: Terraform apply
         working-directory: terraform
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -input=false -var="public_key_path=/home/runner/.ssh/id_rsa.pub"
 
       - name: Get VM public IP
         id: tfout
@@ -53,13 +61,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ansible
-
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ steps.tfout.outputs.public_ip }}" >> ~/.ssh/known_hosts
 
       - name: Run Ansible playbook
         working-directory: ansible
