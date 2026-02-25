@@ -3,3 +3,4 @@
 *.tfstate.*
 .terraform/
 ansible/inventory
+.idea
