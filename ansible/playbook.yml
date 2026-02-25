@@ -81,47 +81,49 @@
         - { key: "KEYCLOAK_URL", value: "http://{{ inventory_hostname }}:8080" }
         - { key: "OIDC_ISSUER",  value: "http://{{ inventory_hostname }}:8080/realms/master" }
 
-    - name: Start docker compose stack
-      command: docker compose -f "{{ compose_file }}" --env-file "{{ app_dir }}/.env" up -d
-      args:
-        chdir: "{{ app_dir }}"
+    - name: Start stack and verify service
+      block:
+        - name: Start docker compose stack
+          command: docker compose -f "{{ compose_file }}" --env-file "{{ app_dir }}/.env" up -d
+          args:
+            chdir: "{{ app_dir }}"
 
-    - name: Wait for port 80 to be open
-      wait_for:
-        host: 127.0.0.1
-        port: 80
-        delay: 2
-        timeout: 90
+        - name: Wait for port 80 to be open
+          wait_for:
+            host: 127.0.0.1
+            port: 80
+            delay: 2
+            timeout: 90
 
-    - name: Check HTTP response (200 or redirect)
-      uri:
-        url: http://localhost/
-        status_code: [200, 302]
-        follow_redirects: none
+        - name: Check HTTP response (200 or redirect)
+          uri:
+            url: http://localhost/
+            status_code: [200, 302]
+            follow_redirects: none
 
-  rescue:
-    - name: Show docker compose ps (debug)
-      command: docker compose -f "{{ compose_file }}" ps
-      args:
-        chdir: "{{ app_dir }}"
-      register: ps_out
-      failed_when: false
-      changed_when: false
+      rescue:
+        - name: Show docker compose ps (debug)
+          command: docker compose -f "{{ compose_file }}" ps
+          args:
+            chdir: "{{ app_dir }}"
+          register: ps_out
+          failed_when: false
+          changed_when: false
 
-    - debug:
-        var: ps_out.stdout_lines
+        - debug:
+            var: ps_out.stdout_lines
 
-    - name: Docker compose logs (debug, last 200 lines)
-      command: docker compose -f "{{ compose_file }}" logs --tail=200
-      args:
-        chdir: "{{ app_dir }}"
-      register: logs_out
-      failed_when: false
-      changed_when: false
+        - name: Docker compose logs (debug, last 200 lines)
+          command: docker compose -f "{{ compose_file }}" logs --tail=200
+          args:
+            chdir: "{{ app_dir }}"
+          register: logs_out
+          failed_when: false
+          changed_when: false
 
-    - debug:
-        var: logs_out.stdout_lines
+        - debug:
+            var: logs_out.stdout_lines
 
-    - name: Fail deployment with diagnostics
-      fail:
-        msg: "Deployment failed. See docker compose ps/logs output above."
+        - name: Fail deployment with diagnostics
+          fail:
+            msg: "Deployment failed. See docker compose ps/logs output above."
