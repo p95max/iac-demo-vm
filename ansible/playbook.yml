@@ -85,11 +85,9 @@
     - name: Start docker compose stack
       command: >
         docker compose
-        -f docker/docker-compose.yml
-        --env-file ../.env
+        -f {{ compose_dir }}/docker-compose.yml
+        --env-file {{ app_dir }}/.env
         up -d
-      args:
-        chdir: "{{ app_dir }}/docker"
 
     - name: Give services time to start
       pause:
