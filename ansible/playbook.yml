@@ -2,7 +2,6 @@
   become: yes
 
   tasks:
-
     - name: Update apt cache
       apt:
         update_cache: yes
@@ -18,7 +17,9 @@
 
     - name: Install Docker
       apt:
-        name: docker.io
+        name:
+          - docker.io
+          - docker-compose-plugin
         state: present
 
     - name: Enable Docker
@@ -33,11 +34,6 @@
         groups: docker
         append: yes
 
-    - name: Install Docker Compose plugin
-      apt:
-        name: docker-compose-plugin
-        state: present
-
     - name: Create app directory
       file:
         path: /opt/hylastix
@@ -48,9 +44,18 @@
       copy:
         src: ../docker/
         dest: /opt/hylastix/
-        mode: "0644"
+        directory_mode: "0755"
 
     - name: Start docker compose stack
       command: docker compose up -d
       args:
         chdir: /opt/hylastix
+
+    - name: Wait for HTTP 200 from nginx
+      uri:
+        url: http://localhost/
+        status_code: 200
+      register: http_check
+      retries: 20
+      delay: 3
+      until: http_check.status == 200
