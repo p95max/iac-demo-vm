@@ -32,3 +32,25 @@
         name: azureuser
         groups: docker
         append: yes
+
+    - name: Install Docker Compose plugin
+      apt:
+        name: docker-compose-plugin
+        state: present
+
+    - name: Create app directory
+      file:
+        path: /opt/hylastix
+        state: directory
+        mode: "0755"
+
+    - name: Copy docker stack to VM
+      copy:
+        src: ../docker/
+        dest: /opt/hylastix/
+        mode: "0644"
+
+    - name: Start docker compose stack
+      command: docker compose up -d
+      args:
+        chdir: /opt/hylastix
