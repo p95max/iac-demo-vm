@@ -1,5 +1,4 @@
 services:
-
   postgres:
     image: postgres:15-alpine
     env_file: .env
@@ -37,7 +36,7 @@ services:
       - --http-address=0.0.0.0:4180
       - --provider=oidc
       - --oidc-issuer-url=${OIDC_ISSUER}
-      - --redirect-url=http://<VM_PUBLIC_IP>/oauth2/callback
+      - --redirect-url=${PUBLIC_URL}/oauth2/callback
       - --email-domain=*
       - --upstream=http://nginx:80
       - --cookie-secure=false
@@ -46,7 +45,6 @@ services:
       - --client-secret=${OAUTH2_PROXY_CLIENT_SECRET}
     depends_on:
       - keycloak
-      - nginx
     networks:
       - backend
 
@@ -57,8 +55,6 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "80:80"
-    depends_on:
-      - oauth2-proxy
     networks:
       - backend
 

@@ -15,7 +15,7 @@
           - lsb-release
         state: present
 
-    - name: Install Docker
+    - name: Install Docker + Compose plugin
       apt:
         name:
           - docker.io
@@ -45,6 +45,22 @@
         src: ../docker/
         dest: /opt/hylastix/
         directory_mode: "0755"
+
+    - name: Write base .env from GitHub secret
+      copy:
+        dest: /opt/hylastix/.env
+        content: "{{ lookup('env', 'DOCKER_ENV_FILE') }}"
+        mode: "0600"
+
+    - name: Append PUBLIC_URL/KEYCLOAK_URL/OIDC_ISSUER using VM IP
+      lineinfile:
+        path: /opt/hylastix/.env
+        line: "{{ item }}"
+        create: yes
+      loop:
+        - "PUBLIC_URL=http://{{ inventory_hostname }}"
+        - "KEYCLOAK_URL=http://{{ inventory_hostname }}:8080"
+        - "OIDC_ISSUER=http://{{ inventory_hostname }}:8080/realms/master"
 
     - name: Start docker compose stack
       command: docker compose up -d
