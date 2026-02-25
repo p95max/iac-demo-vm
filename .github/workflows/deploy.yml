@@ -68,5 +68,5 @@ jobs:
           DOCKER_ENV_FILE: ${{ secrets.DOCKER_ENV_FILE }}
         run: |
           echo "[web]" > inventory.ini
-          echo "${{ steps.tfout.outputs.public_ip }} ansible_user=azureuser ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> inventory.ini
+          echo "${{ steps.tfout.outputs.public_ip }} ansible_user=azureuser ansible_python_interpreter=/usr/bin/python3 ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> inventory.ini
           ansible-playbook -i inventory.ini playbook.yml --private-key ~/.ssh/id_rsa

@@ -1,13 +1,12 @@
-- hosts: web
+---
+- name: Provision VM and deploy HYLASTIX stack
+  hosts: web
   become: yes
 
   tasks:
-    - name: Update apt cache
+    - name: Install prerequisites
       apt:
         update_cache: yes
-
-    - name: Install required packages
-      apt:
         name:
           - ca-certificates
           - curl
@@ -15,14 +14,35 @@
           - lsb-release
         state: present
 
-    - name: Install Docker + Compose plugin
+    - name: Add Docker GPG key
+      ansible.builtin.shell: |
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        chmod a+r /etc/apt/keyrings/docker.gpg
+      args:
+        creates: /etc/apt/keyrings/docker.gpg
+
+    - name: Add Docker apt repository
+      ansible.builtin.shell: |
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+      args:
+        creates: /etc/apt/sources.list.d/docker.list
+
+    - name: Update apt cache after adding Docker repo
+      apt:
+        update_cache: yes
+
+    - name: Install Docker Engine + Compose plugin
       apt:
         name:
-          - docker.io
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
           - docker-compose-plugin
         state: present
 
-    - name: Enable Docker
+    - name: Enable and start Docker
       systemd:
         name: docker
         enabled: yes
@@ -42,7 +62,7 @@
 
     - name: Copy docker stack to VM
       copy:
-        src: ../docker/
+        src: "{{ playbook_dir }}/../docker/"
         dest: /opt/hylastix/
         directory_mode: "0755"
 
