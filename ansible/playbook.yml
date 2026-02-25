@@ -83,9 +83,13 @@
         - { key: "OIDC_ISSUER",  value: "http://{{ inventory_hostname }}:8080/realms/master" }
 
     - name: Start docker compose stack
-      command: docker compose -f "{{ compose_file }}" --env-file "{{ app_dir }}/.env" up -d
+      command: >
+        docker compose
+        -f docker/docker-compose.yml
+        --env-file ../.env
+        up -d
       args:
-        chdir: "{{ compose_dir }}"
+        chdir: "{{ app_dir }}/docker"
 
     - name: Give services time to start
       pause:
