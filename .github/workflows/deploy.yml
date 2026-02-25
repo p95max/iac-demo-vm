@@ -46,7 +46,9 @@ jobs:
 
       - name: Terraform apply
         working-directory: terraform
-        run: terraform apply -auto-approve -input=false -var="public_key_path=/home/runner/.ssh/id_rsa.pub"
+        run: terraform apply -auto-approve -input=false \
+          -var="vm_size=Standard_B2ls_v2" \
+          -var="public_key_path=/home/runner/.ssh/id_rsa.pub"
 
       - name: Get VM public IP
         id: tfout
@@ -68,5 +70,5 @@ jobs:
           DOCKER_ENV_FILE: ${{ secrets.DOCKER_ENV_FILE }}
         run: |
           echo "[web]" > inventory.ini
-          echo "${{ steps.tfout.outputs.public_ip }} ansible_user=azureuser" >> inventory.ini
+          echo "${{ steps.tfout.outputs.public_ip }} ansible_user=azureuser ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> inventory.ini
           ansible-playbook -i inventory.ini playbook.yml --private-key ~/.ssh/id_rsa
