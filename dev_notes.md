@@ -131,7 +131,7 @@ http://20.223.216.43:8080/
 
 # Azure Cleanup
 
-## Delete resource group
+# Delete resource group
 az group delete -n hylastix-rg --yes --no-wait
 
 ## Check if exists

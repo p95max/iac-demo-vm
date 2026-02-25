@@ -3,6 +3,10 @@
   hosts: web
   become: yes
 
+  vars:
+    app_dir: /opt/hylastix
+    compose_file: /opt/hylastix/docker/docker-compose.yml
+
   tasks:
     - name: Install prerequisites
       apt:
@@ -15,7 +19,7 @@
         state: present
 
     - name: Add Docker GPG key
-      ansible.builtin.shell: |
+      shell: |
         install -m 0755 -d /etc/apt/keyrings
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
         chmod a+r /etc/apt/keyrings/docker.gpg
@@ -23,7 +27,7 @@
         creates: /etc/apt/keyrings/docker.gpg
 
     - name: Add Docker apt repository
-      ansible.builtin.shell: |
+      shell: |
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
       args:
         creates: /etc/apt/sources.list.d/docker.list
@@ -48,50 +52,76 @@
         enabled: yes
         state: started
 
-    - name: Add azureuser to docker group
-      user:
-        name: azureuser
-        groups: docker
-        append: yes
-
     - name: Create app directory
       file:
-        path: /opt/hylastix
+        path: "{{ app_dir }}"
         state: directory
         mode: "0755"
 
     - name: Copy docker stack to VM
       copy:
         src: "{{ playbook_dir }}/../docker/"
-        dest: /opt/hylastix/
+        dest: "{{ app_dir }}/docker/"
         directory_mode: "0755"
 
     - name: Write base .env from GitHub secret
       copy:
-        dest: /opt/hylastix/.env
+        dest: "{{ app_dir }}/.env"
         content: "{{ lookup('env', 'DOCKER_ENV_FILE') }}"
         mode: "0600"
 
-    - name: Append PUBLIC_URL/KEYCLOAK_URL/OIDC_ISSUER using VM IP
+    - name: Ensure dynamic URLs are present in .env
       lineinfile:
-        path: /opt/hylastix/.env
-        line: "{{ item }}"
+        path: "{{ app_dir }}/.env"
+        regexp: "^{{ item.key }}="
+        line: "{{ item.key }}={{ item.value }}"
         create: yes
       loop:
-        - "PUBLIC_URL=http://{{ inventory_hostname }}"
-        - "KEYCLOAK_URL=http://{{ inventory_hostname }}:8080"
-        - "OIDC_ISSUER=http://{{ inventory_hostname }}:8080/realms/master"
+        - { key: "PUBLIC_URL",   value: "http://{{ inventory_hostname }}" }
+        - { key: "KEYCLOAK_URL", value: "http://{{ inventory_hostname }}:8080" }
+        - { key: "OIDC_ISSUER",  value: "http://{{ inventory_hostname }}:8080/realms/master" }
 
     - name: Start docker compose stack
-      command: docker compose up -d
+      command: docker compose -f "{{ compose_file }}" --env-file "{{ app_dir }}/.env" up -d
       args:
-        chdir: /opt/hylastix
+        chdir: "{{ app_dir }}"
 
-    - name: Wait for HTTP 200 from nginx
+    - name: Wait for port 80 to be open
+      wait_for:
+        host: 127.0.0.1
+        port: 80
+        delay: 2
+        timeout: 90
+
+    - name: Check HTTP response (200 or redirect)
       uri:
         url: http://localhost/
-        status_code: 200
-      register: http_check
-      retries: 20
-      delay: 3
-      until: http_check.status == 200
+        status_code: [200, 302]
+        follow_redirects: none
+
+  rescue:
+    - name: Show docker compose ps (debug)
+      command: docker compose -f "{{ compose_file }}" ps
+      args:
+        chdir: "{{ app_dir }}"
+      register: ps_out
+      failed_when: false
+      changed_when: false
+
+    - debug:
+        var: ps_out.stdout_lines
+
+    - name: Docker compose logs (debug, last 200 lines)
+      command: docker compose -f "{{ compose_file }}" logs --tail=200
+      args:
+        chdir: "{{ app_dir }}"
+      register: logs_out
+      failed_when: false
+      changed_when: false
+
+    - debug:
+        var: logs_out.stdout_lines
+
+    - name: Fail deployment with diagnostics
+      fail:
+        msg: "Deployment failed. See docker compose ps/logs output above."
