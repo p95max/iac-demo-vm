@@ -46,9 +46,7 @@ jobs:
 
       - name: Terraform apply
         working-directory: terraform
-        run: terraform apply -auto-approve -input=false \
-          -var="vm_size=Standard_B2ls_v2" \
-          -var="public_key_path=/home/runner/.ssh/id_rsa.pub"
+        run: terraform apply -auto-approve -input=false -var="vm_size=Standard_B2ls_v2" -var="public_key_path=/home/runner/.ssh/id_rsa.pub"
 
       - name: Get VM public IP
         id: tfout
