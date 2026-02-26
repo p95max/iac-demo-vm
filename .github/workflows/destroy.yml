@@ -40,6 +40,4 @@ jobs:
 
       - name: Terraform destroy
         working-directory: terraform
-        run: terraform destroy -auto-approve -input=false \
-          -var="vm_size=Standard_B2ls_v2" \
-          -var="public_key_path=/home/runner/.ssh/id_rsa.pub"
+        run: terraform destroy -auto-approve -input=false -var="vm_size=Standard_B2ls_v2" -var="public_key_path=/home/runner/.ssh/id_rsa.pub"
