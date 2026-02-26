@@ -16,18 +16,14 @@ jobs:
           az account set --subscription "${{ secrets.ARM_SUBSCRIPTION_ID }}"
           az account show -o table
 
-      - name: Validate RG name
-        run: |
-          RG="${{ secrets.AZURE_RG_NAME }}"
-          if [ -z "$RG" ]; then
-            echo "AZURE_RG_NAME is empty. Set it in GitHub Secrets."
-            exit 1
-          fi
-          echo "Target RG: $RG"
 
       - name: Delete Resource Group
         run: |
-          RG="${{ secrets.AZURE_RG_NAME }}"
-          az group show -n "$RG" -o table || echo "RG not found (already deleted?)"
-          az group delete -n "$RG" --yes --no-wait
-          az group exists -n "$RG"
+          RG=$(echo "${{ secrets.DOCKER_ENV_FILE }}" | tr -d '[:space:]')
+          echo "Target RG: $RG"
+          if az group show -n "$RG" -o none 2>/dev/null; then
+            az group delete -n "$RG" --yes --no-wait
+            echo "Deletion initiated"
+          else
+            echo "RG not found, already deleted"
+          fi
