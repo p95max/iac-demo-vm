@@ -15,6 +15,10 @@ jobs:
             --tenant "${{ secrets.ARM_TENANT_ID }}"
           az account set --subscription "${{ secrets.ARM_SUBSCRIPTION_ID }}"
           az account show -o table
+          
+      - name: List Resource Groups
+        run: |
+          az group list -o table
 
       - name: Delete Resource Group
         run: |
