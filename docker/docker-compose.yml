@@ -2,7 +2,7 @@ services:
   postgres:
     image: postgres:15-alpine
     env_file:
-      - ../.env
+      - /opt/hylastix/.env
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -11,30 +11,47 @@ services:
       - pg_data:/var/lib/postgresql/data
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     env_file:
-      - ../.env
+      - /opt/hylastix/.env
     command: start-dev --http-port=8080
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_DB: ${KC_DB}
-      KC_DB_URL_HOST: ${KC_DB_URL_HOST}
-      KC_DB_USERNAME: ${KC_DB_USERNAME}
-      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_PROXY_HEADERS: "xforwarded"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 2>/dev/null && echo '' >&3 && echo 'healthy' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
 
   oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     env_file:
-      - ../.env
+      - /opt/hylastix/.env
     command:
       - --http-address=0.0.0.0:4180
       - --provider=oidc
@@ -46,10 +63,13 @@ services:
       - --cookie-secret=${OAUTH2_PROXY_COOKIE_SECRET}
       - --client-id=${OAUTH2_PROXY_CLIENT_ID}
       - --client-secret=${OAUTH2_PROXY_CLIENT_SECRET}
+      - --insecure-oidc-allow-unverified-email=true
     depends_on:
-      - keycloak
+      keycloak:
+        condition: service_healthy
     networks:
       - backend
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
@@ -58,11 +78,16 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "80:80"
+    depends_on:
+      oauth2-proxy:
+        condition: service_started
     networks:
       - backend
+    restart: unless-stopped
 
 volumes:
   pg_data:
 
 networks:
   backend:
+    name: docker_backend

@@ -89,6 +89,6 @@
         --env-file {{ app_dir }}/.env
         up -d
 
-    - name: Give services time to start
+    - name: Give services time to start(60s)
       pause:
         seconds: 60
