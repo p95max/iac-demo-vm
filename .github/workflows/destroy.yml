@@ -1,4 +1,4 @@
-name: Teardown Infrastructure
+name: Destroy Infrastructure
 
 on:
   workflow_dispatch:
@@ -18,12 +18,4 @@ jobs:
 
 
       - name: Delete Resource Group
-        run: |
-          RG=$(echo "${{ secrets.DOCKER_ENV_FILE }}" | tr -d '[:space:]')
-          echo "Target RG: $RG"
-          if az group show -n "$RG" -o none 2>/dev/null; then
-            az group delete -n "$RG" --yes --no-wait
-            echo "Deletion initiated"
-          else
-            echo "RG not found, already deleted"
-          fi
+        run: az group delete -n "hylastix-rg" --yes
