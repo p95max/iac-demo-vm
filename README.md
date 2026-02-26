@@ -18,6 +18,12 @@ The application is exposed via Azure Public IP and served through Nginx running 
 
 ---
 
+## Design Decisions
+
+See [DESIGN.md](DESIGN.md) for component choices, image selection, and network configuration rationale.
+
+---
+
 ## Architecture Overview
 
 ```

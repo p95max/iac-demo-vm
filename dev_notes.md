@@ -52,10 +52,6 @@ curl -I http://127.0.0.1/
 ## Check Keycloak locally
 curl -I http://127.0.0.1:8080/
 
-## External access
-http://20.223.216.43/
-http://20.223.216.43:8080/
-
 
 # Azure Cleanup
 
