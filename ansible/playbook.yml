@@ -89,6 +89,14 @@
         --env-file {{ app_dir }}/.env
         up -d --remove-orphans
 
+    - name: Read KEYCLOAK_ADMIN_PASSWORD from .env
+      shell: grep '^KEYCLOAK_ADMIN_PASSWORD=' {{ app_dir }}/.env | cut -d'=' -f2
+      register: kc_password
+
+    - name: Read OAUTH2_PROXY_CLIENT_SECRET from .env
+      shell: grep '^OAUTH2_PROXY_CLIENT_SECRET=' {{ app_dir }}/.env | cut -d'=' -f2
+      register: kc_client_secret
+
     - name: Wait for Keycloak to be ready
       command: >
         docker exec docker-keycloak-1
@@ -96,7 +104,7 @@
         --server http://localhost:8080
         --realm master
         --user admin
-        --password {{ lookup('ini', 'KEYCLOAK_ADMIN_PASSWORD type=properties file=' + app_dir + '/.env') }}
+        --password {{ kc_password.stdout }}
       retries: 30
       delay: 10
       register: kc_login
@@ -108,29 +116,22 @@
         /opt/keycloak/bin/kcadm.sh update realms/master
         -s sslRequired=NONE
 
-    - name: Get admin user ID from Keycloak
-      command: >
-        docker exec docker-keycloak-1
-        /opt/keycloak/bin/kcadm.sh get users
-        --realm master -q username=admin
-      register: kc_admin_user
-
     - name: Set admin email and mark as verified
-      command: >
+      shell: |
         docker exec docker-keycloak-1 bash -c "
-        ID=$(echo '{{ kc_admin_user.stdout }}' | grep '\"id\"' | head -1 | grep -oP '\"id\" : \"\K[^\"]+') &&
-        /opt/keycloak/bin/kcadm.sh update users/$ID --realm master
-        -s email=admin@local.dev
-        -s emailVerified=true"
+        /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password {{ kc_password.stdout }} &&
+        ID=\$(/opt/keycloak/bin/kcadm.sh get users --realm master -q username=admin | grep '\"id\"' | head -1 | grep -oP '\"id\" : \"\K[^\"]+') &&
+        /opt/keycloak/bin/kcadm.sh update users/\$ID --realm master -s email=admin@local.dev -s emailVerified=true"
 
     - name: Create nginx OIDC client in Keycloak
-      command: >
-        docker exec docker-keycloak-1
-        /opt/keycloak/bin/kcadm.sh create clients --realm master
-        -s clientId=nginx
-        -s enabled=true
-        -s publicClient=false
-        -s secret={{ lookup('ini', 'OAUTH2_PROXY_CLIENT_SECRET type=properties file=' + app_dir + '/.env') }}
-        -s redirectUris='["http://{{ inventory_hostname }}/oauth2/callback"]'
-        -s webOrigins='["http://{{ inventory_hostname }}"]'
+      shell: |
+        docker exec docker-keycloak-1 bash -c "
+        /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password {{ kc_password.stdout }} &&
+        /opt/keycloak/bin/kcadm.sh create clients --realm master \
+        -s clientId=nginx \
+        -s enabled=true \
+        -s publicClient=false \
+        -s secret={{ kc_client_secret.stdout }} \
+        -s 'redirectUris=[\"http://{{ inventory_hostname }}/oauth2/callback\"]' \
+        -s 'webOrigins=[\"http://{{ inventory_hostname }}\"]'"
       ignore_errors: yes
