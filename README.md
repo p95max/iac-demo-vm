@@ -12,7 +12,7 @@ Public endpoint: `http://<public-ip>/`
 
 The application is exposed via Azure Public IP and served through Nginx running inside Docker on a Linux VM.
 
-# Auth test data
+### Auth test data for KeyCloak
 Login: admin
 Password: 55655
 
@@ -78,9 +78,6 @@ Docker Compose orchestrates all services with health checks and proper dependenc
 5. oauth2-proxy validates the OIDC token and grants access
 6. Nginx serves the protected static page
 
-**Logout behavior:** The /oauth2/sign_out endpoint clears the oauth2-proxy session cookie.
-The Keycloak SSO session may remain active unless explicitly terminated at the Identity Provider.
-
 ---
 
 ## CI/CD
@@ -97,18 +94,19 @@ GitHub Actions automates the full infrastructure lifecycle.
 5. `ansible-playbook` — configure VM and deploy stack
 
 **Destroy** (`destroy.yml`) — triggered manually via `workflow_dispatch`:
-1. `terraform destroy` — tear down all Azure resources
+1. Azure CLI login via Service Principal
+2. Delete Resource Group `hylastix-rg` and all contained resources
 
 ### GitHub Secrets Required
 
-| Secret | Description |
-|--------|-------------|
-| `ARM_CLIENT_ID` | Azure Service Principal client ID |
-| `ARM_CLIENT_SECRET` | Azure Service Principal secret |
-| `ARM_SUBSCRIPTION_ID` | Azure subscription ID |
-| `ARM_TENANT_ID` | Azure tenant ID |
-| `SSH_PRIVATE_KEY` | SSH private key for VM access |
-| `DOCKER_ENV_FILE` | Contents of `.env` file with all service secrets |
+| Secret | Description                                             |
+|--------|---------------------------------------------------------|
+| `ARM_CLIENT_ID` | Azure Service Principal client ID                       |
+| `ARM_CLIENT_SECRET` | Azure Service Principal secret                          |
+| `ARM_SUBSCRIPTION_ID` | Azure subscription ID                                   |
+| `ARM_TENANT_ID` | Azure tenant ID                                         |
+| `SSH_PRIVATE_KEY` | SSH private key for VM access                           |
+| `DOCKER_ENV_FILE` | Contents of `docker/.env` file with all service secrets |
 
 ---
 

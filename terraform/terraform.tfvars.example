@@ -1,2 +1,0 @@
-public_key_path = "/path/to/your/ssh_key.pub"
-vm_size         = "Standard_B1s"

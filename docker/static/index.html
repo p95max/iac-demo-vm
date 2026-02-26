@@ -16,10 +16,9 @@
                     This static page is protected by Keycloak authentication.
                 </p>
             </div>
-                <a href="/oauth2/sign_out"
-                   class="btn btn-outline-danger btn-sm">
-                    Logout
-                </a>
+
+            <a href="#" class="btn btn-outline-danger btn-sm" onclick="logout(); return false;">Logout</a>
+
         </div>
     </div>
 </div>
@@ -43,6 +42,12 @@
         toast.show();
         console.log("Static page loaded successfully.");
     });
+</script>
+<script>
+    function logout() {
+    const keycloakLogout = `http://${window.location.hostname}:8080/realms/master/protocol/openid-connect/logout?redirect_uri=http://${window.location.hostname}/oauth2/sign_in`;
+    window.location.href = `/oauth2/sign_out?rd=${encodeURIComponent(keycloakLogout)}`;
+}
 </script>
 
 </body>

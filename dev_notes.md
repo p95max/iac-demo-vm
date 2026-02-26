@@ -1,25 +1,5 @@
 # Terraform -- Infrastructure
 
-## Init
-terraform init
-
-## Plan
-terraform plan
-
-## Apply
-terraform apply
-
-## Destroy
-terraform destroy -auto-approve
-
-
-# Reset Terraform state (if broken)
-
-rm -rf .terraform
-rm -f terraform.tfstate terraform.tfstate.backup
-terraform init
-
-
 # Azure CLI — Infrastructure Debug
 
 ## Check available free/low SKU
@@ -64,58 +44,6 @@ ansible -i inventory.ini web -m ping
 ## Run playbook
 ansible-playbook -i inventory.ini playbook.yml
 
-
-# Docker Setup (on VM)
-
-## Install official Docker CE
-sudo apt remove -y docker.io
-sudo apt update
-sudo apt install -y ca-certificates curl gnupg
-
-## Add Docker repo
-sudo install -m 0755 -d /etc/apt/keyrings
-
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-echo \
-"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-https://download.docker.com/linux/ubuntu \
-$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-## Install Docker
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-## Check Docker
-docker info
-docker compose version
-
-
-# Docker Compose — Stack
-
-## Pull images
-docker compose pull
-
-## Start stack
-docker compose up -d
-
-## Restart service
-docker compose restart nginx
-
-## Stop service
-docker compose stop oauth2-proxy
-
-## Show running containers
-docker ps
-
-## View logs
-docker compose logs -f --tail=200
-docker compose logs -f --tail=200 keycloak
-docker compose logs -f --tail=200 oauth2-proxy
-
-
 # Service Checks
 
 ## Check nginx locally
@@ -137,9 +65,9 @@ az group delete -n hylastix-rg --yes --no-wait
 ## Check if exists
 az group exists -n hylastix-rg
 
+az group list --output table
 
-# Terraform Import (when provider bugged)
 
-terraform import azurerm_network_security_group.nsg "/subscriptions/.../networkSecurityGroups/hylastix-nsg"
+# Change files in server
 
-terraform import azurerm_linux_virtual_machine.vm "/subscriptions/.../virtualMachines/hylastix-vm"
+sudo nano /opt/hylastix/docker/static/index.html
