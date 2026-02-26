@@ -87,8 +87,50 @@
         docker compose
         -f {{ compose_dir }}/docker-compose.yml
         --env-file {{ app_dir }}/.env
-        up -d
+        up -d --remove-orphans
 
-    - name: Give services time to start(60s)
-      pause:
-        seconds: 60
+    - name: Wait for Keycloak to be ready
+      command: >
+        docker exec docker-keycloak-1
+        /opt/keycloak/bin/kcadm.sh config credentials
+        --server http://localhost:8080
+        --realm master
+        --user admin
+        --password {{ lookup('ini', 'KEYCLOAK_ADMIN_PASSWORD type=properties file=' + app_dir + '/.env') }}
+      retries: 30
+      delay: 10
+      register: kc_login
+      until: kc_login.rc == 0
+
+    - name: Disable SSL requirement in Keycloak master realm
+      command: >
+        docker exec docker-keycloak-1
+        /opt/keycloak/bin/kcadm.sh update realms/master
+        -s sslRequired=NONE
+
+    - name: Get admin user ID from Keycloak
+      command: >
+        docker exec docker-keycloak-1
+        /opt/keycloak/bin/kcadm.sh get users
+        --realm master -q username=admin
+      register: kc_admin_user
+
+    - name: Set admin email and mark as verified
+      command: >
+        docker exec docker-keycloak-1 bash -c "
+        ID=$(echo '{{ kc_admin_user.stdout }}' | grep '\"id\"' | head -1 | grep -oP '\"id\" : \"\K[^\"]+') &&
+        /opt/keycloak/bin/kcadm.sh update users/$ID --realm master
+        -s email=admin@local.dev
+        -s emailVerified=true"
+
+    - name: Create nginx OIDC client in Keycloak
+      command: >
+        docker exec docker-keycloak-1
+        /opt/keycloak/bin/kcadm.sh create clients --realm master
+        -s clientId=nginx
+        -s enabled=true
+        -s publicClient=false
+        -s secret={{ lookup('ini', 'OAUTH2_PROXY_CLIENT_SECRET type=properties file=' + app_dir + '/.env') }}
+        -s redirectUris='["http://{{ inventory_hostname }}/oauth2/callback"]'
+        -s webOrigins='["http://{{ inventory_hostname }}"]'
+      ignore_errors: yes
