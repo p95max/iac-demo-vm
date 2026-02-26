@@ -4,23 +4,22 @@ on:
   workflow_dispatch:
 
 jobs:
-  nuke:
+  teardown:
     runs-on: ubuntu-latest
     steps:
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Show RG
+      - name: Azure CLI login (service principal)
         run: |
-          echo "Target RG: ${{ secrets.AZURE_RG_NAME }}"
-          az group show -n "${{ secrets.AZURE_RG_NAME }}" -o table || echo "RG not found (already deleted?)"
+          az login --service-principal \
+            -u "${{ secrets.ARM_CLIENT_ID }}" \
+            -p "${{ secrets.ARM_CLIENT_SECRET }}" \
+            --tenant "${{ secrets.ARM_TENANT_ID }}"
+          az account set --subscription "${{ secrets.ARM_SUBSCRIPTION_ID }}"
+          az account show -o table
 
-      - name: Delete RG
+      - name: Delete Resource Group
         run: |
-          az group delete -n "${{ secrets.AZURE_RG_NAME }}" --yes --no-wait
-
-      - name: Verify deletion started
-        run: |
-          az group exists -n "${{ secrets.AZURE_RG_NAME }}"
+          RG="${{ secrets.AZURE_RG_NAME }}"
+          echo "Deleting RG: $RG"
+          az group show -n "$RG" -o table || echo "RG not found (already deleted?)"
+          az group delete -n "$RG" --yes --no-wait
+          az group exists -n "$RG"
