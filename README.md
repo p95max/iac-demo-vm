@@ -2,39 +2,35 @@
 
 This project implements the candidate task for HYLASTIX GmbH.
 
-The goal was to provision a minimal cloud infrastructure in Microsoft
-Azure using Infrastructure as Code, deploy a containerized Keycloak
-setup with a Postgres database, and protect access to a static web page
-via OpenID Connect.
+The goal was to provision a minimal cloud infrastructure in Microsoft Azure using Infrastructure as Code, deploy a containerized Keycloak setup with a Postgres database, and protect access to a static web page via OpenID Connect.
 
-------------------------------------------------------------------------
+---
 
 ## Live Demo
 
-Public endpoint:
+Public endpoint: `http://<public-ip>/`
 
-http://20.223.216.43/
+The application is exposed via Azure Public IP and served through Nginx running inside Docker on a Linux VM.
 
-The application is exposed via Azure Public IP and served through Nginx
-running inside Docker on a Linux VM.
-
-------------------------------------------------------------------------
+---
 
 ## Architecture Overview
 
-Internet\
-↓\
-Azure Public IP\
-↓\
-Azure VM (Ubuntu 22.04 LTS)\
-↓\
-Docker network\
-├── nginx (reverse proxy, port 80)\
-├── oauth2-proxy (OIDC middleware)\
-├── keycloak (Identity Provider)\
-└── postgres (Keycloak database)
+```
+Internet
+↓
+Azure Public IP
+↓
+Azure VM (Ubuntu 22.04 LTS)
+↓
+Docker network
+├── nginx          (reverse proxy, port 80)
+├── oauth2-proxy   (OIDC middleware)
+├── keycloak       (Identity Provider, port 8080)
+└── postgres       (Keycloak database)
+```
 
-------------------------------------------------------------------------
+---
 
 ## Infrastructure
 
@@ -42,144 +38,114 @@ All infrastructure components are provisioned using Terraform.
 
 ### Azure Resources
 
--   Resource Group
--   Virtual Network
--   Subnet
--   Network Security Group
--   Public IP (Standard SKU)
--   Linux Virtual Machine (Ubuntu 22.04 LTS)
+- Resource Group
+- Virtual Network + Subnet
+- Network Security Group
+- Public IP (Standard SKU)
+- Linux Virtual Machine (Ubuntu 22.04 LTS)
 
-### Network Configuration
+### Open Ports
 
-Open ports:
+- 22 (SSH)
+- 80 (HTTP)
+- 8080 (Keycloak)
 
--   22 (SSH)
--   80 (HTTP)
--   8080 (Keycloak)
-
-The NSG is attached to the subnet to control inbound traffic.
-
-------------------------------------------------------------------------
+---
 
 ## Container Environment
 
-The VM hosts a minimal Docker-based container environment.
-
 ### Services
 
--   Nginx --- reverse proxy and static web server
--   Keycloak --- Identity Provider (OIDC)
--   Postgres --- persistent database for Keycloak
--   oauth2-proxy --- authentication gateway
+- **Nginx** — reverse proxy and static web server with proxy buffer tuning for large oauth2-proxy headers
+- **Keycloak** — Identity Provider (OIDC)
+- **Postgres** — persistent database for Keycloak
+- **oauth2-proxy** — authentication gateway
 
-Docker Compose is used to orchestrate services.
+Docker Compose orchestrates all services with health checks and proper dependency ordering.
 
-------------------------------------------------------------------------
+---
 
 ## Authentication Flow
 
-1.  User accesses the public endpoint
-2.  Nginx forwards auth requests to oauth2-proxy
-3.  oauth2-proxy redirects to Keycloak
-4.  User authenticates
-5.  Access is granted to the protected static page
+1. User accesses the public endpoint
+2. Nginx forwards auth requests to oauth2-proxy via `auth_request`
+3. oauth2-proxy redirects unauthenticated users to Keycloak
+4. User authenticates with Keycloak credentials
+5. oauth2-proxy validates the OIDC token and grants access
+6. Nginx serves the protected static page
 
-------------------------------------------------------------------------
+---
 
-## Provisioning
+## CI/CD
 
-All configuration tasks on the VM are automated using Ansible.
+GitHub Actions automates the full infrastructure lifecycle.
 
-Ansible responsibilities:
+### Workflows
 
--   Install Docker
--   Install Docker Compose plugin
--   Configure user permissions
--   Deploy container stack
+**Deploy** (`deploy.yml`) — triggered manually via `workflow_dispatch`:
+1. Checkout repository
+2. Prepare SSH keys from GitHub Secrets
+3. `terraform apply` — provision Azure infrastructure
+4. Extract VM public IP from Terraform output
+5. `ansible-playbook` — configure VM and deploy stack
 
-------------------------------------------------------------------------
+**Destroy** (`destroy.yml`) — triggered manually via `workflow_dispatch`:
+1. `terraform destroy` — tear down all Azure resources
 
-## CI/CD (Planned / Extendable)
+### GitHub Secrets Required
 
-GitHub Actions can be used to:
+| Secret | Description |
+|--------|-------------|
+| `ARM_CLIENT_ID` | Azure Service Principal client ID |
+| `ARM_CLIENT_SECRET` | Azure Service Principal secret |
+| `ARM_SUBSCRIPTION_ID` | Azure subscription ID |
+| `ARM_TENANT_ID` | Azure tenant ID |
+| `SSH_PRIVATE_KEY` | SSH private key for VM access |
+| `DOCKER_ENV_FILE` | Contents of `.env` file with all service secrets |
 
--   Deploy infrastructure (terraform apply)
--   Configure VM (ansible-playbook)
--   Destroy infrastructure (terraform destroy)
+---
 
-------------------------------------------------------------------------
+## Provisioning (Ansible)
 
-## Why These Components?
+Ansible handles full VM configuration automatically after Terraform provisions the VM.
 
-### Terraform
+### Tasks
 
-Used for declarative Infrastructure as Code.\
-Ensures reproducibility and state management.
+- Install Docker Engine + Compose plugin
+- Copy Docker stack to VM
+- Write `.env` from GitHub Secret
+- Inject dynamic values (`PUBLIC_URL`, `OIDC_ISSUER`) based on VM public IP
+- Start Docker Compose stack
+- Wait for Keycloak to become healthy
+- Disable SSL requirement in Keycloak master realm
+- Set admin email and mark as verified
+- Create `nginx` OIDC client in Keycloak with correct redirect URIs
 
-### Ansible
+All Keycloak configuration is fully automated — no manual steps required after deploy.
 
-Chosen for post-provision configuration.\
-Keeps infrastructure provisioning and configuration management
-separated.
-
-### Docker
-
-Provides isolated, portable, minimal runtime environment.
-
-### Keycloak
-
-Open-source Identity Provider supporting OpenID Connect.
-
-### Postgres
-
-Reliable relational database required by Keycloak.
-
-### Nginx
-
-Lightweight reverse proxy and static content server.
-
-------------------------------------------------------------------------
+---
 
 ## Possible Extensions
 
--   HTTPS with Let's Encrypt
--   Domain binding
--   Azure Managed Identity integration
--   Container health checks
--   Azure Application Gateway
--   Remote Terraform backend (Azure Storage)
--   Monitoring (Prometheus + Grafana)
--   Logging stack (ELK)
+- HTTPS with Let's Encrypt
+- Domain binding
+- Remote Terraform backend (Azure Blob Storage)
+- Redis session storage for oauth2-proxy (replaces multi-cookie workaround)
+- Azure Managed Identity integration
+- Monitoring (Prometheus + Grafana)
+- Logging stack (ELK)
 
-------------------------------------------------------------------------
+---
 
-## Current Status
+## Security Notes
 
-Infrastructure provisioning: Complete\
-Container deployment: Complete\
-External access: Operational\
-OIDC integration: In progress\
-CI/CD automation: Extendable
+- All secrets are excluded from the repository
+- Terraform state is not committed (move to remote backend for production)
+- SSH private keys are not committed
+- Example configuration files are provided where needed
 
-------------------------------------------------------------------------
+---
 
-## Cleanup
-
-To destroy infrastructure:
-
-terraform destroy
-
-------------------------------------------------------------------------
-
-## Notes
-
--   All secrets are excluded from the repository.
--   Terraform state is not committed.
--   SSH private keys are not committed.
--   Example configuration files are provided where needed.
-
-------------------------------------------------------------------------
-
-## Author: Maksym Petrykin  
+## Author: Maksym Petrykin
 Email: [m.petrykin@gmx.de](mailto:m.petrykin@gmx.de)  
 Telegram: [@max_p95](https://t.me/max_p95)
