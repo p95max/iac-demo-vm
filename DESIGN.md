@@ -1,13 +1,21 @@
 ## Design Decisions
 
 ### Why Terraform?
-Terraform was chosen for infrastructure provisioning because it provides declarative, reproducible infrastructure as code. The entire Azure environment (VM, VNet, NSG, Public IP) can be created and destroyed with a single command. Alternatives like ARM templates or Bicep were not used — they are Azure-specific, while Terraform is provider-agnostic and more readable.
+Terraform was chosen for infrastructure provisioning because it provides declarative, reproducible infrastructure as code. The entire Azure environment (VM, VNet, NSG, Public IP) can be created and destroyed with a single command (in my case Github Actions). Alternatives like ARM templates or Bicep were not used — they are Azure-specific, while Terraform is provider-agnostic and more readable.
+
+### Why GitHub Actions?
+GitHub Actions was chosen for CI/CD because the project is already hosted on GitHub — no additional tooling or accounts needed. It provides native integration with the repository, supports `workflow_dispatch` for manual triggers, and handles secrets securely. Alternatives like Jenkins or GitLab CI would require separate infrastructure to run.
 
 ### Why Ansible?
 Ansible handles VM configuration after Terraform provisions the infrastructure. It installs Docker, copies the application stack, writes the `.env` file, and fully configures Keycloak automatically — no manual SSH steps required. Shell scripts were considered but Ansible is idempotent, readable, and fits the separation of concerns: Terraform for infrastructure, Ansible for configuration.
 
-### Why Docker Compose?
-Docker Compose was chosen as the container environment because it is lightweight, simple to reason about, and sufficient for a single-VM setup. Kubernetes would be overkill for this scale — it adds significant operational complexity without benefit when running 4 containers on one machine.
+### Why Docker Compose + Nginx?
+Docker Compose was chosen as the container environment because it is lightweight, simple to reason about, and sufficient for a single-VM setup. Kubernetes would be overkill for this scale - it adds significant operational complexity without benefit when running 4 containers on one machine.
+
+Nginx was chosen as the web server and reverse proxy because it is minimal, fast, and natively supports the `auth_request` module - which delegates authentication to oauth2-proxy without any custom code. Apache was not considered as it is heavier and less suited for this use case.
+
+### Why This Static Page Setup?
+The static page `docker/static/index.html` is served directly by Nginx from the filesystem - no application server needed. Bootstrap was used for minimal styling without adding build complexity. JavaScript functionality is verified on load via a toast notification, confirming that JS execution works correctly in the protected context. Logout is handled client-side by chaining oauth2-proxy `/oauth2/sign_out` with a Keycloak session termination redirect, ensuring both the proxy cookie and the SSO session are cleared.
 
 ### Why These Images?
 - `postgres:15-alpine` — minimal footprint, stable, well-supported by Keycloak
