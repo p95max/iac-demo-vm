@@ -1,0 +1,26 @@
+name: Teardown Infrastructure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  nuke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Show RG
+        run: |
+          echo "Target RG: ${{ secrets.AZURE_RG_NAME }}"
+          az group show -n "${{ secrets.AZURE_RG_NAME }}" -o table || echo "RG not found (already deleted?)"
+
+      - name: Delete RG
+        run: |
+          az group delete -n "${{ secrets.AZURE_RG_NAME }}" --yes --no-wait
+
+      - name: Verify deletion started
+        run: |
+          az group exists -n "${{ secrets.AZURE_RG_NAME }}"
