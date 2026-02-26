@@ -13,8 +13,8 @@ Public endpoint: `http://<public-ip>/`
 The application is exposed via Azure Public IP and served through Nginx running inside Docker on a Linux VM.
 
 ### Auth test data for KeyCloak
-Login: admin
-Password: 55655
+- Login: admin
+- Password: 55655
 
 ---
 
