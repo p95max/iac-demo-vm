@@ -12,6 +12,10 @@ Public endpoint: `http://<public-ip>/`
 
 The application is exposed via Azure Public IP and served through Nginx running inside Docker on a Linux VM.
 
+# Auth test data
+Login: admin
+Password: 55655
+
 ---
 
 ## Architecture Overview
@@ -74,6 +78,9 @@ Docker Compose orchestrates all services with health checks and proper dependenc
 5. oauth2-proxy validates the OIDC token and grants access
 6. Nginx serves the protected static page
 
+**Logout behavior:** The /oauth2/sign_out endpoint clears the oauth2-proxy session cookie.
+The Keycloak SSO session may remain active unless explicitly terminated at the Identity Provider.
+
 ---
 
 ## CI/CD
@@ -122,18 +129,6 @@ Ansible handles full VM configuration automatically after Terraform provisions t
 - Create `nginx` OIDC client in Keycloak with correct redirect URIs
 
 All Keycloak configuration is fully automated — no manual steps required after deploy.
-
----
-
-## Possible Extensions
-
-- HTTPS with Let's Encrypt
-- Domain binding
-- Remote Terraform backend (Azure Blob Storage)
-- Redis session storage for oauth2-proxy (replaces multi-cookie workaround)
-- Azure Managed Identity integration
-- Monitoring (Prometheus + Grafana)
-- Logging stack (ELK)
 
 ---
 
