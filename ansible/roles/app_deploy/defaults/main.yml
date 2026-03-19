@@ -1,0 +1,6 @@
+---
+app_root: /opt/hylastix
+docker_project_name: hylastix
+public_url: "http://{{ inventory_hostname }}"
+keycloak_url: "http://{{ inventory_hostname }}:8080"
+oidc_issuer: "http://{{ inventory_hostname }}:8080/realms/master"

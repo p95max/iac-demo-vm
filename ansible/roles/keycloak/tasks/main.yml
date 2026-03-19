@@ -1,0 +1,83 @@
+---
+- name: Read application environment file
+  ansible.builtin.slurp:
+    src: "{{ app_root }}/.env"
+  register: app_env_raw
+
+- name: Extract Keycloak admin password
+  ansible.builtin.set_fact:
+    keycloak_admin_password: >-
+      {{
+        (app_env_raw.content | b64decode)
+        | regex_search('(?m)^KEYCLOAK_ADMIN_PASSWORD=(.*)$', '\\1')
+        | first
+      }}
+
+- name: Extract oauth2 client secret
+  ansible.builtin.set_fact:
+    oauth2_proxy_client_secret: >-
+      {{
+        (app_env_raw.content | b64decode)
+        | regex_search('(?m)^OAUTH2_PROXY_CLIENT_SECRET=(.*)$', '\\1')
+        | first
+      }}
+
+- name: Wait until Keycloak admin CLI login works
+  ansible.builtin.command: >
+    docker exec {{ docker_project_name }}-keycloak-1
+    /opt/keycloak/bin/kcadm.sh config credentials
+    --server http://localhost:8080
+    --realm master
+    --user admin
+    --password {{ keycloak_admin_password }}
+  register: kc_login
+  retries: 30
+  delay: 10
+  until: kc_login.rc == 0
+  changed_when: false
+
+- name: Disable SSL requirement in master realm
+  ansible.builtin.command: >
+    docker exec {{ docker_project_name }}-keycloak-1
+    /opt/keycloak/bin/kcadm.sh update realms/master
+    -s sslRequired=NONE
+  changed_when: true
+
+- name: Set admin email and verify it
+  ansible.builtin.shell: |
+    docker exec {{ docker_project_name }}-keycloak-1 bash -c '
+    /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "{{ keycloak_admin_password }}" >/dev/null &&
+    ID=$(/opt/keycloak/bin/kcadm.sh get users --realm master -q username=admin | sed -n "s/.*\"id\" : \"\([^\"]*\)\".*/\1/p" | head -1) &&
+    /opt/keycloak/bin/kcadm.sh update users/$ID --realm master -s email=admin@local.dev -s emailVerified=true
+    '
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+- name: Check whether nginx client already exists
+  ansible.builtin.shell: |
+    docker exec {{ docker_project_name }}-keycloak-1 bash -c '
+    /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "{{ keycloak_admin_password }}" >/dev/null &&
+    /opt/keycloak/bin/kcadm.sh get clients --realm master -q clientId=nginx
+    '
+  args:
+    executable: /bin/bash
+  register: keycloak_client_check
+  changed_when: false
+
+- name: Create nginx OIDC client
+  ansible.builtin.shell: |
+    docker exec {{ docker_project_name }}-keycloak-1 bash -c '
+    /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "{{ keycloak_admin_password }}" >/dev/null &&
+    /opt/keycloak/bin/kcadm.sh create clients --realm master \
+      -s clientId=nginx \
+      -s enabled=true \
+      -s publicClient=false \
+      -s secret="{{ oauth2_proxy_client_secret }}" \
+      -s "redirectUris=[\"http://{{ inventory_hostname }}/oauth2/callback\"]" \
+      -s "webOrigins=[\"http://{{ inventory_hostname }}\"]"
+    '
+  args:
+    executable: /bin/bash
+  when: "'\"clientId\" : \"nginx\"' not in keycloak_client_check.stdout"
+  changed_when: true

@@ -1,0 +1,44 @@
+---
+- name: Create application directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ app_root }}"
+    - "{{ app_root }}/static"
+
+- name: Render application environment file
+  ansible.builtin.copy:
+    dest: "{{ app_root }}/.env"
+    content: |
+      {{ lookup('env', 'DOCKER_ENV_FILE') | trim }}
+      PUBLIC_URL={{ public_url }}
+      KEYCLOAK_URL={{ keycloak_url }}
+      OIDC_ISSUER={{ oidc_issuer }}
+    mode: "0600"
+
+- name: Render docker compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ app_root }}/docker-compose.yml"
+    mode: "0644"
+
+- name: Render nginx config
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ app_root }}/nginx.conf"
+    mode: "0644"
+
+- name: Copy static page
+  ansible.builtin.copy:
+    src: static/index.html
+    dest: "{{ app_root }}/static/index.html"
+    mode: "0644"
+
+- name: Start docker compose stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_root }}"
+    project_name: "{{ docker_project_name }}"
+    state: present
+    pull: always

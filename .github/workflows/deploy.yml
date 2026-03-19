@@ -18,7 +18,7 @@ jobs:
       ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Prepare SSH keys
@@ -48,27 +48,35 @@ jobs:
 
       - name: Terraform apply
         working-directory: terraform
-        run: terraform apply -auto-approve -input=false -var="vm_size=Standard_B2ls_v2" -var="public_key_path=/home/runner/.ssh/id_rsa.pub"
+        run: |
+          terraform apply -auto-approve -input=false \
+            -var="vm_size=Standard_B2ls_v2" \
+            -var="public_key_path=/home/runner/.ssh/id_rsa.pub"
 
-      - name: Get VM public IP
+      - name: Export Terraform outputs
         id: tfout
         working-directory: terraform
         run: |
           echo "public_ip=$(terraform output -raw public_ip)" >> "$GITHUB_OUTPUT"
+          terraform output -raw ansible_inventory > ../ansible/inventory.ini
 
       - name: Print public IP
         run: echo "Public IP is ${{ steps.tfout.outputs.public_ip }}"
 
-      - name: Install Ansible
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible and collections
         run: |
           python -m pip install --upgrade pip
-          pip install ansible
+          pip install ansible docker
+          ansible-galaxy collection install -r ansible/requirements.yml
 
       - name: Run Ansible playbook
         working-directory: ansible
         env:
           DOCKER_ENV_FILE: ${{ secrets.DOCKER_ENV_FILE }}
         run: |
-          echo "[web]" > inventory.ini
-          echo "${{ steps.tfout.outputs.public_ip }} ansible_user=azureuser ansible_python_interpreter=/usr/bin/python3 ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> inventory.ini
           ansible-playbook -i inventory.ini playbook.yml --private-key ~/.ssh/id_rsa

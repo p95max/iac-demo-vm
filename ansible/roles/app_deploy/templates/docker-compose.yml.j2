@@ -2,7 +2,7 @@ services:
   postgres:
     image: postgres:15-alpine
     env_file:
-      - /opt/hylastix/.env
+      - {{ app_root }}/.env
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -16,21 +16,20 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+    restart: unless-stopped
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     env_file:
-      - /opt/hylastix/.env
+      - {{ app_root }}/.env
     command: start-dev --http-port=8080
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-
       KC_DB: postgres
       KC_DB_URL_HOST: postgres
       KC_DB_USERNAME: ${POSTGRES_USER}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
-
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
@@ -47,11 +46,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 60
+    restart: unless-stopped
 
   oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     env_file:
-      - /opt/hylastix/.env
+      - {{ app_root }}/.env
     command:
       - --http-address=0.0.0.0:4180
       - --provider=oidc
@@ -90,4 +90,4 @@ volumes:
 
 networks:
   backend:
-    name: docker_backend
+    name: hylastix_backend
