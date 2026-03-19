@@ -1,11 +1,11 @@
 ---
-- name: Provision VM and deploy HYLASTIX stack
+- name: Provision VM and deploy stack
   hosts: web
   become: true
 
   vars:
-    app_root: /opt/hylastix
-    docker_project_name: hylastix
+    app_root: /opt/iac-demo
+    docker_project_name: iac-demo
 
   roles:
     - role: docker

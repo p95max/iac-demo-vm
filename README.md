@@ -1,10 +1,11 @@
-# HYLASTIX Cloud Infrastructure Test
+# Azure IaC: OIDC-Protected Web Application
 
-This project implements the candidate task for HYLASTIX GmbH.
+This project demonstrates a production-style Infrastructure as Code setup on Microsoft Azure using Terraform and Ansible.
 
-The goal was to provision a minimal cloud infrastructure in Microsoft Azure using Infrastructure as Code, deploy a containerized Keycloak setup with a Postgres database, and protect access to a static web page via OpenID Connect.
+It provisions a VM, deploys a containerized application stack (Keycloak + oauth2-proxy + Nginx), and protects access to a static web page via OpenID Connect (OIDC).
 
 ---
+
 
 ## Live Demo
 
