@@ -1,39 +1,136 @@
 ## Design Decisions
 
 ### Why Terraform?
-Terraform was chosen for infrastructure provisioning because it provides declarative, reproducible infrastructure as code. The entire Azure environment (VM, VNet, NSG, Public IP) can be created and destroyed with a single command (in my case Github Actions). Alternatives like ARM templates or Bicep were not used — they are Azure-specific, while Terraform is provider-agnostic and more readable.
+
+Terraform was chosen for infrastructure provisioning because it provides declarative and reproducible infrastructure as code.
+
+**Improvements (v2):**
+- Resource naming aligned with purpose instead of type
+- Inventory generation moved to Terraform using `templatefile()`
+- Reduced dependency on CI scripts
+
+---
 
 ### Why GitHub Actions?
-GitHub Actions was chosen for CI/CD because the project is already hosted on GitHub — no additional tooling or accounts needed. It provides native integration with the repository, supports `workflow_dispatch` for manual triggers, and handles secrets securely. Alternatives like Jenkins or GitLab CI would require separate infrastructure to run.
+
+GitHub Actions was chosen due to tight integration with the repository and built-in secret management.
+
+**Improvements (v2):**
+- Reduced bash scripting
+- Cleaner pipeline with Terraform → Ansible separation
+
+---
 
 ### Why Ansible?
-Ansible handles VM configuration after Terraform provisions the infrastructure. It installs Docker, copies the application stack, writes the `.env` file, and fully configures Keycloak automatically — no manual SSH steps required. Shell scripts were considered but Ansible is idempotent, readable, and fits the separation of concerns: Terraform for infrastructure, Ansible for configuration.
 
-### Why Docker Compose + Nginx?
-Docker Compose was chosen as the container environment because it is lightweight, simple to reason about, and sufficient for a single-VM setup. Kubernetes would be overkill for this scale - it adds significant operational complexity without benefit when running 4 containers on one machine.
+Ansible handles VM configuration after provisioning.
 
-Nginx was chosen as the web server and reverse proxy because it is minimal, fast, and natively supports the `auth_request` module - which delegates authentication to oauth2-proxy without any custom code. Apache was not considered as it is heavier and less suited for this use case.
+**Improvements (v2):**
 
-### Why This Static Page Setup?
-The static page `docker/static/index.html` is served directly by Nginx from the filesystem - no application server needed. Bootstrap was used for minimal styling without adding build complexity. JavaScript functionality is verified on load via a toast notification, confirming that JS execution works correctly in the protected context. Logout is handled client-side by chaining oauth2-proxy `/oauth2/sign_out` with a Keycloak session termination redirect, ensuring both the proxy cookie and the SSO session are cleared.
+- Introduced **role-based architecture**
+- Replaced flat playbook with modular structure:
+  - docker
+  - app_deploy
+  - keycloak
 
-### Why These Images?
-- `postgres:15-alpine` — minimal footprint, stable, well-supported by Keycloak
-- `quay.io/keycloak/keycloak:24.0` — official Keycloak image, supports OIDC out of the box
-- `quay.io/oauth2-proxy/oauth2-proxy:v7.6.0` — lightweight OIDC proxy that integrates cleanly with Nginx `auth_request`
-- `nginx:alpine` — minimal reverse proxy, serves static files, handles auth delegation
+Benefits:
+- better maintainability
+- reusability
+- clearer separation of concerns
 
-### Why This Network Configuration?
-All containers share a single internal Docker network (`backend`). Only Nginx (port 80) and Keycloak (port 8080) are exposed externally via NSG rules. oauth2-proxy and Postgres are internal only — they have no public ports. SSH (port 22) is open for provisioning. This keeps the attack surface minimal for a non-production setup.
+---
 
-### Why oauth2-proxy Instead of Direct Keycloak Integration?
-Nginx does not natively support OIDC. oauth2-proxy sits between Nginx and the application, handles the full OIDC flow, and uses Nginx `auth_request` to gate access. This is a clean, well-established pattern that keeps the static web server simple.
+### Why Reduce Shell Usage?
+
+Shell commands reduce idempotency and make automation harder to maintain.
+
+**Changes (v2):**
+- Replaced docker CLI calls with `community.docker.docker_compose_v2`
+- Left shell only where no native modules exist (Keycloak CLI)
+
+---
+
+### Why Templates Instead of Static Files?
+
+Previously, configuration was copied as static files.
+
+**Now:**
+- docker-compose and nginx configs are generated dynamically
+- environment values injected at deploy time
+
+Benefits:
+- flexibility
+- portability
+- easier scaling
+
+---
+
+### Why Remove docker/ Directory?
+
+Static copying was replaced with templating approach.
+
+This aligns with IaC principles:
+
+> infrastructure should generate configuration, not copy artifacts
+
+---
+
+### Why Docker Compose?
+
+Docker Compose is sufficient for a single-node deployment.
+
+Kubernetes was intentionally avoided due to:
+- higher complexity
+- no benefit at this scale
+
+---
+
+### Why Nginx?
+
+Nginx is used as:
+- reverse proxy
+- static file server
+- authentication gateway via `auth_request`
+
+---
+
+### Why oauth2-proxy?
+
+Nginx does not support OIDC natively.
+
+oauth2-proxy:
+- handles authentication flow
+- integrates with Keycloak
+- works seamlessly with Nginx
+
+---
+
+### Network Design
+
+- Single internal Docker network (`backend`)
+- Public ports:
+  - 80 (Nginx)
+  - 8080 (Keycloak)
+  - 22 (SSH)
+
+Minimizes attack surface.
+
+---
+
+### Trade-offs
+
+- Keycloak bootstrap still uses shell
+  - no stable Ansible module available
+- Terraform modules not introduced
+  - avoided overengineering for small scope
+
+---
 
 ### Possible Extensions
-- **HTTPS / Let's Encrypt** — production deployments require TLS; can be added via Certbot or Azure Application Gateway
-- **Remote Terraform backend** — storing state in Azure Blob Storage prevents state conflicts in team workflows
-- **Redis session storage** — oauth2-proxy currently splits sessions across multiple cookies (>4kb); Redis eliminates this
-- **Domain binding** — replace raw IP with a proper domain for stable URLs across deploys
-- **Monitoring** — Prometheus + Grafana for container and VM metrics
-- **Logging** — centralized log aggregation (ELK or Loki) for debugging across services
-- **Azure Managed Identity** — eliminate static credentials for Azure API access
+
+- Terraform modules (network / vm)
+- Remote state backend (Azure Blob)
+- HTTPS (Let's Encrypt)
+- Redis for oauth2-proxy sessions
+- Monitoring (Prometheus + Grafana)
+- Centralized logging (Loki / ELK)

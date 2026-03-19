@@ -12,7 +12,7 @@ Public endpoint: `http://<public-ip>/`
 
 The application is exposed via Azure Public IP and served through Nginx running inside Docker on a Linux VM.
 
-### Auth test data for KeyCloak
+### Auth test data for Keycloak
 - Login: admin
 - Password: 55655
 
@@ -20,13 +20,11 @@ The application is exposed via Azure Public IP and served through Nginx running 
 
 ## Design Decisions
 
-See [DESIGN.md](DESIGN.md) for component choices, image selection, and network configuration rationale.
+See [DESIGN.md](DESIGN.md) for detailed architectural and implementation decisions.
 
 ---
 
 ## Architecture Overview
-
-```
 Internet
 ↓
 Azure Public IP
@@ -34,15 +32,17 @@ Azure Public IP
 Azure VM (Ubuntu 22.04 LTS)
 ↓
 Docker network
-├── nginx          (reverse proxy, port 80)
-├── oauth2-proxy   (OIDC middleware)
-├── keycloak       (Identity Provider, port 8080)
-└── postgres       (Keycloak database)
-```
+├── nginx (reverse proxy, port 80)
+├── oauth2-proxy (OIDC middleware)
+├── keycloak (Identity Provider, port 8080)
+└── postgres (Keycloak database)
 
 ---
 
-## Infrastructure
+
+---
+
+## Infrastructure (Terraform)
 
 All infrastructure components are provisioned using Terraform.
 
@@ -54,11 +54,41 @@ All infrastructure components are provisioned using Terraform.
 - Public IP (Standard SKU)
 - Linux Virtual Machine (Ubuntu 22.04 LTS)
 
-### Open Ports
+### Improvements (v2 after feedback)
 
-- 22 (SSH)
-- 80 (HTTP)
-- 8080 (Keycloak)
+- Resource naming aligned with **purpose instead of type**
+- Introduced **Terraform templatefile()** for Ansible inventory generation
+- Reduced coupling between Terraform and CI (less bash glue code)
+
+---
+
+## Configuration Management (Ansible)
+
+Ansible is responsible for full VM provisioning and application deployment.
+
+### Key Improvements
+
+- Introduced **role-based structure**
+- Replaced flat playbook with modular design
+- Reduced usage of `shell` and `command`
+- Introduced **Jinja2 templates** for dynamic configuration generation
+
+### Roles
+
+- `docker`
+  - installs Docker Engine and dependencies
+  - configures system packages
+
+- `app_deploy`
+  - renders `.env`
+  - generates `docker-compose.yml` via template
+  - generates `nginx.conf`
+  - deploys application stack
+
+- `keycloak`
+  - bootstraps Keycloak
+  - configures realm settings
+  - creates OIDC client
 
 ---
 
@@ -66,85 +96,84 @@ All infrastructure components are provisioned using Terraform.
 
 ### Services
 
-- **Nginx** — reverse proxy and static web server with proxy buffer tuning for large oauth2-proxy headers
-- **Keycloak** — Identity Provider (OIDC)
-- **Postgres** — persistent database for Keycloak
-- **oauth2-proxy** — authentication gateway
+- **Nginx**
+  - reverse proxy
+  - static file server
+  - integrates with oauth2-proxy via `auth_request`
 
-Docker Compose orchestrates all services with health checks and proper dependency ordering.
+- **oauth2-proxy**
+  - handles OIDC authentication flow
+  - integrates with Keycloak
+
+- **Keycloak**
+  - identity provider
+  - configured automatically via Ansible
+
+- **Postgres**
+  - persistent database for Keycloak
+
+### Improvements (v2)
+
+- Removed static `docker/` directory
+- All configuration is now **generated via templates**
+- Environment-specific values injected dynamically
 
 ---
 
 ## Authentication Flow
 
 1. User accesses the public endpoint
-2. Nginx forwards auth requests to oauth2-proxy via `auth_request`
-3. oauth2-proxy redirects unauthenticated users to Keycloak
-4. User authenticates with Keycloak credentials
-5. oauth2-proxy validates the OIDC token and grants access
-6. Nginx serves the protected static page
+2. Nginx delegates authentication to oauth2-proxy
+3. oauth2-proxy redirects user to Keycloak
+4. User authenticates
+5. oauth2-proxy validates token
+6. Nginx serves protected content
 
 ---
 
-## CI/CD
+## CI/CD (GitHub Actions)
 
-GitHub Actions automates the full infrastructure lifecycle.
+GitHub Actions automates infrastructure provisioning and deployment.
 
-### Workflows
+### Deploy Workflow
 
-**Deploy** (`deploy.yml`) — triggered manually via `workflow_dispatch`:
 1. Checkout repository
-2. Prepare SSH keys from GitHub Secrets
-3. `terraform apply` — provision Azure infrastructure
-4. Extract VM public IP from Terraform output
-5. `ansible-playbook` — configure VM and deploy stack
+2. Prepare SSH keys
+3. Run `terraform apply`
+4. Generate Ansible inventory from Terraform output
+5. Execute Ansible playbook
 
-**Destroy** (`destroy.yml`) — triggered manually via `workflow_dispatch`:
-1. Azure CLI login via Service Principal
-2. Delete Resource Group `hylastix-rg` and all contained resources
+### Improvements (v2)
 
-### GitHub Secrets Required
-
-| Secret | Description                                             |
-|--------|---------------------------------------------------------|
-| `ARM_CLIENT_ID` | Azure Service Principal client ID                       |
-| `ARM_CLIENT_SECRET` | Azure Service Principal secret                          |
-| `ARM_SUBSCRIPTION_ID` | Azure subscription ID                                   |
-| `ARM_TENANT_ID` | Azure tenant ID                                         |
-| `SSH_PRIVATE_KEY` | SSH private key for VM access                           |
-| `DOCKER_ENV_FILE` | Contents of `docker/.env` file with all service secrets |
+- Removed manual `echo`-based inventory generation
+- Terraform outputs now directly generate inventory file
+- Cleaner separation of responsibilities
 
 ---
 
-## Provisioning (Ansible)
+## GitHub Secrets Required
 
-Ansible handles full VM configuration automatically after Terraform provisions the VM.
-
-### Tasks
-
-- Install Docker Engine + Compose plugin
-- Copy Docker stack to VM
-- Write `.env` from GitHub Secret
-- Inject dynamic values (`PUBLIC_URL`, `OIDC_ISSUER`) based on VM public IP
-- Start Docker Compose stack
-- Wait for Keycloak to become healthy
-- Disable SSL requirement in Keycloak master realm
-- Set admin email and mark as verified
-- Create `nginx` OIDC client in Keycloak with correct redirect URIs
-
-All Keycloak configuration is fully automated — no manual steps required after deploy.
+| Secret | Description |
+|--------|-------------|
+| ARM_CLIENT_ID | Azure Service Principal |
+| ARM_CLIENT_SECRET | Azure Secret |
+| ARM_SUBSCRIPTION_ID | Subscription |
+| ARM_TENANT_ID | Tenant |
+| SSH_PRIVATE_KEY | SSH access |
+| DOCKER_ENV_FILE | Application env variables |
 
 ---
 
 ## Security Notes
 
-- All secrets are excluded from the repository
-- Terraform state is not committed (move to remote backend for production)
-- SSH private keys are not committed
-- Example configuration files are provided where needed
+- Secrets are not stored in repository
+- SSH keys injected via CI only
+- Terraform state is not committed (should use remote backend in production)
 
 ---
 
-## Author: Maksym Petrykin
-Email: [m.petrykin@gmx.de](mailto:m.petrykin@gmx.de)  
-Telegram: [@max_p95](https://t.me/max_p95)
+## Author
+
+Maksym Petrykin  
+Email: m.petrykin@gmx.de  
+Telegram: @max_p95
