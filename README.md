@@ -6,19 +6,6 @@ It provisions a VM, deploys a containerized application stack (Keycloak + oauth2
 
 ---
 
-
-## Live Demo
-
-Public endpoint: `http://<public-ip>/`
-
-The application is exposed via Azure Public IP and served through Nginx running inside Docker on a Linux VM.
-
-### Auth test data for Keycloak
-- Login: admin
-- Password: 55655
-
----
-
 ## Design Decisions
 
 See [DESIGN.md](DESIGN.md) for detailed architectural and implementation decisions.
@@ -26,19 +13,20 @@ See [DESIGN.md](DESIGN.md) for detailed architectural and implementation decisio
 ---
 
 ## Architecture Overview
-Internet
-↓
-Azure Public IP
-↓
-Azure VM (Ubuntu 22.04 LTS)
-↓
-Docker network
-├── nginx (reverse proxy, port 80)
-├── oauth2-proxy (OIDC middleware)
-├── keycloak (Identity Provider, port 8080)
-└── postgres (Keycloak database)
 
----
+```
+Internet
+    ↓
+Azure Public IP
+    ↓
+Azure VM (Ubuntu 22.04 LTS)
+    ↓
+Docker network
+    ├── nginx (reverse proxy, port 80)
+    ├── oauth2-proxy (OIDC middleware)
+    ├── keycloak (Identity Provider, port 8080)
+    └── postgres (Keycloak database)
+```
 
 
 ---
